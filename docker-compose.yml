@@ -1,0 +1,77 @@
+version: '3'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: backend.dockerfile
+    ports:
+      - "81:80"
+    environment:
+      - PROJECT_NAME=Task Xenter
+      - SECRET_KEY=
+      - DEBUG=True
+      - DB_CONNECTION=postgres://postgres:postgres@db:5432/checkin
+      - SENTRY_DSN=
+    volumes:
+      - ./backend/app:/app
+    depends_on:
+      - db
+  celeryworker:
+    build:
+      context: ./backend
+      dockerfile: celeryworker.dockerfile
+    environment:
+      - SENTRY_DSN=
+    volumes:
+      - ./backend/app:/app
+    depends_on: 
+      - db
+      - queue
+  db:
+    image: postgres:12
+    volumes:
+       - db_data:/var/lib/postgres
+    environment:
+      - POSTGRES_DB=checkin
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+  queue:
+    image: rabbitmq:3-management
+    volumes:
+       - queue_data:/var/lib/rabbitmq
+  pgadmin:
+    image: dpage/pgadmin4
+    ports:
+      - "5050:5050"
+    environment:
+      - PGADMIN_LISTEN_PORT=5050
+      - PGADMIN_DEFAULT_EMAIL=
+      - PGADMIN_DEFAULT_PASSWORD=
+    depends_on:
+      - db
+  flower:
+    image: mher/flower
+    ports:
+      - "5555:5555"
+    environment:
+      - FLOWER_BASIC_AUTH=
+    command:
+      - "--broker=amqp://guest@queue:5672//"
+      - "--broker_api=http://guest:guest@queue:15672/api//"
+    depends_on:
+      - queue
+      - celeryworker
+  nginx:
+    build:
+      context: ./nginx-dev
+      dockerfile: nginx-dev.dockerfile
+    ports:
+      - "80:80"
+    depends_on: 
+      - backend
+
+volumes:
+    db_data: {}
+    queue_data: {}
